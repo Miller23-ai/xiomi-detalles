@@ -2,17 +2,20 @@ import { NavLink } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import {
   LayoutDashboard, ShoppingCart, Package, Gift, BarChart2,
-  LogOut, ChevronRight, Flower2, Receipt, X, Wallet
+  LogOut, ChevronRight, Flower2, X, Wallet, Tag, Settings
 } from 'lucide-react'
 
 const links = [
-  { to: '/',           label: 'Dashboard',     icon: LayoutDashboard },
-  { to: '/pedidos',    label: 'Pedidos',        icon: Gift },
-  { to: '/productos',  label: 'Productos',      icon: Package },
-  { to: '/materiales', label: 'Materiales',     icon: Flower2 },
-  { to: '/compras',    label: 'Compras',        icon: ShoppingCart },
-  { to: '/gastos',     label: 'Gastos',         icon: Wallet },
-  { to: '/finanzas',   label: 'Finanzas',       icon: BarChart2 },
+  { to: '/',              label: 'Dashboard',    icon: LayoutDashboard },
+  { to: '/pedidos',       label: 'Pedidos',       icon: Gift },
+  { to: '/productos',     label: 'Productos',     icon: Package },
+  { to: '/materiales',    label: 'Materiales',    icon: Flower2 },
+  { to: '/compras',       label: 'Compras',       icon: ShoppingCart },
+  { to: '/gastos',        label: 'Gastos',        icon: Wallet },
+  { to: '/finanzas',      label: 'Finanzas',      icon: BarChart2 },
+  null, // divider
+  { to: '/categorias',    label: 'Categorías',    icon: Tag },
+  { to: '/configuracion', label: 'Configuración', icon: Settings },
 ]
 
 export default function Sidebar({ open, onClose }) {
@@ -20,7 +23,6 @@ export default function Sidebar({ open, onClose }) {
 
   return (
     <>
-      {/* Mobile overlay */}
       {open && (
         <div className="fixed inset-0 bg-black/50 z-20 lg:hidden" onClick={onClose} />
       )}
@@ -32,7 +34,6 @@ export default function Sidebar({ open, onClose }) {
         ${open ? 'translate-x-0' : '-translate-x-full'}
       `} style={{ background: 'linear-gradient(180deg, #1a0a10 0%, #2d0f1e 100%)' }}>
 
-        {/* Logo */}
         <div className="p-5 border-b border-pink-900/40">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
@@ -49,27 +50,24 @@ export default function Sidebar({ open, onClose }) {
           </div>
         </div>
 
-        {/* Navigation */}
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-          <p className="text-pink-500/40 text-xs font-medium uppercase tracking-widest px-4 mb-3">Menú</p>
-          {links.map(({ to, label, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={to === '/'}
-              onClick={onClose}
-              className={({ isActive }) =>
-                `sidebar-link ${isActive ? 'active' : ''}`
-              }
-            >
-              <Icon size={17} />
-              <span className="flex-1">{label}</span>
-              <ChevronRight size={14} className="opacity-30" />
-            </NavLink>
-          ))}
+          <p className="text-pink-500/40 text-xs font-medium uppercase tracking-widest px-4 mb-3">Gestión</p>
+          {links.map((link, i) => {
+            if (link === null) return (
+              <div key={`div-${i}`} className="my-2 border-t border-pink-900/30" />
+            )
+            const Icon = link.icon
+            return (
+              <NavLink key={link.to} to={link.to} end={link.to === '/'} onClick={onClose}
+                       className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}>
+                <Icon size={17} />
+                <span className="flex-1">{link.label}</span>
+                <ChevronRight size={14} className="opacity-30" />
+              </NavLink>
+            )
+          })}
         </nav>
 
-        {/* User + logout */}
         <div className="p-4 border-t border-pink-900/40">
           <div className="flex items-center gap-3 px-2 mb-3">
             <div className="w-8 h-8 rounded-full bg-pink-500/30 flex items-center justify-center text-pink-200 text-xs font-bold">
@@ -80,10 +78,8 @@ export default function Sidebar({ open, onClose }) {
               <p className="text-pink-500/50 text-xs">Administradora</p>
             </div>
           </div>
-          <button
-            onClick={signOut}
-            className="sidebar-link w-full text-red-400/70 hover:text-red-300 hover:bg-red-900/20"
-          >
+          <button onClick={signOut}
+                  className="sidebar-link w-full text-red-400/70 hover:text-red-300 hover:bg-red-900/20">
             <LogOut size={17} />
             <span>Cerrar sesión</span>
           </button>

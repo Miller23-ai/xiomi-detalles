@@ -1,25 +1,28 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import Modal from '../components/ui/Modal'
-import { Plus, Pencil, Trash2, Search, Package, Tag } from 'lucide-react'
-
-const CATEGORIAS = ['Ramos', 'Ramos eternos', 'Cajas', 'Cajas LED', 'Combos', 'Personalizados', 'Otros']
+import { Plus, Pencil, Trash2, Search, Package, Upload, Image, X } from 'lucide-react'
 
 const emptyForm = {
-  nombre: '', descripcion: '', categoria: 'Ramos',
-  precio_venta: '', costo_estimado: '', stock: '0', activo: true
+  nombre: '', descripcion: '', categoria: '',
+  precio_venta: '', costo_estimado: '', stock: '0', activo: true, photo_url: ''
 }
 
 export default function Productos() {
-  const [productos, setProductos] = useState([])
-  const [loading,   setLoading]   = useState(true)
-  const [search,    setSearch]    = useState('')
-  const [modal,     setModal]     = useState(false)
-  const [editing,   setEditing]   = useState(null)
-  const [form,      setForm]      = useState(emptyForm)
-  const [saving,    setSaving]    = useState(false)
+  const [productos,  setProductos]  = useState([])
+  const [categorias, setCategorias] = useState([])
+  const [loading,    setLoading]    = useState(true)
+  const [search,     setSearch]     = useState('')
+  const [modal,      setModal]      = useState(false)
+  const [editing,    setEditing]    = useState(null)
+  const [form,       setForm]       = useState(emptyForm)
+  const [saving,     setSaving]     = useState(false)
+  const [uploading,  setUploading]  = useState(false)
+  const [photoFile,  setPhotoFile]  = useState(null)
+  const [photoPreview, setPhotoPreview] = useState(null)
+  const fileRef = useRef()
 
-  useEffect(() => { fetchProductos() }, [])
+  useEffect(() => { fetchProductos(); fetchCategorias() }, [])
 
   async function fetchProductos() {
     setLoading(true)
@@ -28,13 +31,55 @@ export default function Productos() {
     setLoading(false)
   }
 
-  function openNew()  { setEditing(null); setForm(emptyForm); setModal(true) }
+  async function fetchCategorias() {
+    const { data } = await supabase.from('categorias').select('nombre').eq('tipo', 'producto').order('nombre')
+    setCategorias(data?.map(c => c.nombre) || ['Ramos','Ramos eternos','Cajas','Cajas LED','Combos','Personalizados','Otros'])
+  }
+
+  function openNew() {
+    setEditing(null)
+    setForm({ ...emptyForm, categoria: categorias[0] || '' })
+    setPhotoFile(null); setPhotoPreview(null)
+    setModal(true)
+  }
+
   function openEdit(p) {
     setEditing(p.id)
-    setForm({ nombre: p.nombre, descripcion: p.descripcion || '', categoria: p.categoria,
-              precio_venta: p.precio_venta, costo_estimado: p.costo_estimado || 0,
-              stock: p.stock, activo: p.activo })
+    setForm({
+      nombre: p.nombre, descripcion: p.descripcion || '', categoria: p.categoria || '',
+      precio_venta: p.precio_venta, costo_estimado: p.costo_estimado || 0,
+      stock: p.stock, activo: p.activo, photo_url: p.photo_url || ''
+    })
+    setPhotoFile(null)
+    setPhotoPreview(p.photo_url || null)
     setModal(true)
+  }
+
+  function handlePhotoChange(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 5 * 1024 * 1024) { alert('La foto no puede superar 5MB'); return }
+    setPhotoFile(file)
+    setPhotoPreview(URL.createObjectURL(file))
+  }
+
+  function removePhoto() {
+    setPhotoFile(null)
+    setPhotoPreview(null)
+    setForm(p => ({...p, photo_url: ''}))
+    if (fileRef.current) fileRef.current.value = ''
+  }
+
+  async function uploadPhoto(productoId) {
+    if (!photoFile) return form.photo_url || null
+    setUploading(true)
+    const ext  = photoFile.name.split('.').pop()
+    const path = `${productoId}.${ext}`
+    const { error } = await supabase.storage.from('productos').upload(path, photoFile, { upsert: true })
+    if (error) { console.error('Upload error:', error); setUploading(false); return form.photo_url || null }
+    const { data: { publicUrl } } = supabase.storage.from('productos').getPublicUrl(path)
+    setUploading(false)
+    return publicUrl
   }
 
   async function handleSave() {
@@ -45,8 +90,21 @@ export default function Productos() {
       costo_estimado: Number(form.costo_estimado) || 0,
       stock:          Number(form.stock) || 0,
     }
-    if (editing) await supabase.from('productos').update(payload).eq('id', editing)
-    else         await supabase.from('productos').insert(payload)
+
+    let productoId = editing
+    if (editing) {
+      await supabase.from('productos').update(payload).eq('id', editing)
+    } else {
+      const { data } = await supabase.from('productos').insert(payload).select().single()
+      productoId = data?.id
+    }
+
+    // Upload photo if selected
+    if (productoId && photoFile) {
+      const photoUrl = await uploadPhoto(productoId)
+      if (photoUrl) await supabase.from('productos').update({ photo_url: photoUrl }).eq('id', productoId)
+    }
+
     setSaving(false); setModal(false); fetchProductos()
   }
 
@@ -68,8 +126,7 @@ export default function Productos() {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="relative">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input value={search} onChange={e => setSearch(e.target.value)}
@@ -80,11 +137,10 @@ export default function Productos() {
         </button>
       </div>
 
-      {/* Summary */}
       <div className="grid grid-cols-3 gap-3">
         <div className="card text-center">
           <p className="text-2xl font-bold text-gray-700">{productos.filter(p => p.activo).length}</p>
-          <p className="text-xs text-gray-400">Productos activos</p>
+          <p className="text-xs text-gray-400">Activos</p>
         </div>
         <div className="card text-center">
           <p className="text-2xl font-bold text-pink-600">
@@ -94,11 +150,10 @@ export default function Productos() {
         </div>
         <div className="card text-center">
           <p className="text-2xl font-bold text-gray-700">{productos.reduce((s, p) => s + (p.stock || 0), 0)}</p>
-          <p className="text-xs text-gray-400">Productos en stock</p>
+          <p className="text-xs text-gray-400">En stock</p>
         </div>
       </div>
 
-      {/* Products grid */}
       {loading ? (
         <div className="flex justify-center py-12">
           <div className="w-8 h-8 border-4 border-pink-200 border-t-pink-500 rounded-full animate-spin" />
@@ -113,19 +168,25 @@ export default function Productos() {
           {filtered.map(p => {
             const mg = margen(p)
             return (
-              <div key={p.id} className={`card ${!p.activo ? 'opacity-60' : ''}`}>
-                <div className="flex items-start justify-between mb-3">
-                  <div className="w-10 h-10 rounded-xl bg-pink-100 flex items-center justify-center flex-shrink-0">
-                    <Package size={18} className="text-pink-500" />
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    {!p.activo && (
-                      <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">Inactivo</span>
-                    )}
-                    <span className="text-xs bg-pink-50 text-pink-600 px-2 py-0.5 rounded-full font-medium">
-                      {p.categoria}
+              <div key={p.id} className={`card overflow-hidden ${!p.activo ? 'opacity-60' : ''}`}>
+                {/* Product photo */}
+                <div className="relative -mx-5 -mt-5 mb-4 h-40 bg-pink-50 overflow-hidden">
+                  {p.photo_url ? (
+                    <img src={p.photo_url} alt={p.nombre}
+                         className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Image size={40} className="text-pink-200" />
+                    </div>
+                  )}
+                  {!p.activo && (
+                    <span className="absolute top-2 right-2 text-xs bg-gray-800/70 text-white px-2 py-0.5 rounded-full">
+                      Inactivo
                     </span>
-                  </div>
+                  )}
+                  <span className="absolute top-2 left-2 text-xs bg-pink-500 text-white px-2 py-0.5 rounded-full font-medium">
+                    {p.categoria}
+                  </span>
                 </div>
 
                 <h3 className="font-medium text-gray-800 text-sm mb-1">{p.nombre}</h3>
@@ -145,7 +206,7 @@ export default function Productos() {
                 {mg !== null && (
                   <div className="mb-3">
                     <div className="flex justify-between text-xs mb-1">
-                      <span className="text-gray-400">Margen</span>
+                      <span className="text-gray-400">Margen de ganancia</span>
                       <span className={`font-semibold ${Number(mg) >= 40 ? 'text-emerald-500' : Number(mg) >= 20 ? 'text-amber-500' : 'text-red-500'}`}>
                         {mg}%
                       </span>
@@ -157,9 +218,9 @@ export default function Productos() {
                   </div>
                 )}
 
-                <div className="flex items-center justify-between text-xs text-gray-400 mb-3">
-                  <span>Stock: <span className="font-medium text-gray-600">{p.stock || 0} uds.</span></span>
-                </div>
+                <p className="text-xs text-gray-400 mb-3">
+                  Stock: <span className="font-medium text-gray-600">{p.stock || 0} uds.</span>
+                </p>
 
                 <div className="flex gap-1 pt-3 border-t border-gray-100">
                   <button onClick={() => openEdit(p)} className="flex-1 btn-secondary text-xs py-1.5 justify-center">
@@ -177,8 +238,38 @@ export default function Productos() {
 
       {/* Modal */}
       <Modal open={modal} onClose={() => setModal(false)}
-             title={editing ? 'Editar producto' : 'Nuevo producto'}>
+             title={editing ? 'Editar producto' : 'Nuevo producto'} size="lg">
         <div className="space-y-4">
+          {/* Photo upload */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-2">Foto del producto</label>
+            <div className="relative">
+              {photoPreview ? (
+                <div className="relative w-full h-40 rounded-xl overflow-hidden bg-pink-50">
+                  <img src={photoPreview} alt="preview" className="w-full h-full object-cover" />
+                  <button onClick={removePhoto}
+                          className="absolute top-2 right-2 w-7 h-7 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600">
+                    <X size={14} />
+                  </button>
+                </div>
+              ) : (
+                <button onClick={() => fileRef.current?.click()}
+                        className="w-full h-32 border-2 border-dashed border-pink-200 rounded-xl flex flex-col items-center justify-center gap-2 hover:bg-pink-50 transition-colors cursor-pointer">
+                  <Upload size={20} className="text-pink-300" />
+                  <p className="text-xs text-gray-400">Clic para subir foto (máx. 5MB)</p>
+                  <p className="text-xs text-gray-300">JPG, PNG, WEBP</p>
+                </button>
+              )}
+              <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp"
+                     className="hidden" onChange={handlePhotoChange} />
+            </div>
+            {!photoPreview && (
+              <p className="text-xs text-gray-400 mt-1">
+                💡 Las fotos se guardan en Supabase Storage (gratis hasta 1GB). No afecta el límite de Netlify.
+              </p>
+            )}
+          </div>
+
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Nombre *</label>
             <input value={form.nombre} onChange={e => setForm(p => ({...p, nombre: e.target.value}))}
@@ -188,16 +279,18 @@ export default function Productos() {
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Descripción</label>
             <textarea value={form.descripcion} onChange={e => setForm(p => ({...p, descripcion: e.target.value}))}
-                      className="input-field resize-none" rows={2}
-                      placeholder="Qué incluye este detalle..." />
+                      className="input-field resize-none" rows={2} placeholder="Qué incluye este detalle..." />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Categoría</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Categoría
+                <a href="/categorias" className="ml-2 text-pink-500 text-xs font-normal hover:underline">+ gestionar</a>
+              </label>
               <select value={form.categoria} onChange={e => setForm(p => ({...p, categoria: e.target.value}))}
                       className="select-field">
-                {CATEGORIAS.map(c => <option key={c}>{c}</option>)}
+                {categorias.map(c => <option key={c}>{c}</option>)}
               </select>
             </div>
             <div>
@@ -225,29 +318,27 @@ export default function Productos() {
 
           {form.precio_venta && form.costo_estimado && (
             <div className="bg-emerald-50 rounded-xl p-3 text-sm">
-              <p className="text-gray-600">
-                Ganancia por venta:
-                <span className="font-bold text-emerald-600 ml-2">
-                  S/ {(Number(form.precio_venta) - Number(form.costo_estimado)).toFixed(2)}
-                </span>
-                <span className="text-gray-400 ml-2">
-                  ({(((Number(form.precio_venta) - Number(form.costo_estimado)) / Number(form.precio_venta)) * 100).toFixed(0)}% margen)
-                </span>
-              </p>
+              <span className="text-gray-600">Ganancia por venta: </span>
+              <span className="font-bold text-emerald-600 ml-1">
+                S/ {(Number(form.precio_venta) - Number(form.costo_estimado)).toFixed(2)}
+              </span>
+              <span className="text-gray-400 ml-2">
+                ({(((Number(form.precio_venta) - Number(form.costo_estimado)) / Number(form.precio_venta)) * 100).toFixed(0)}%)
+              </span>
             </div>
           )}
 
           <div className="flex items-center gap-2">
             <input type="checkbox" id="activo" checked={form.activo}
-                   onChange={e => setForm(p => ({...p, activo: e.target.checked}))}
-                   className="rounded" />
-            <label htmlFor="activo" className="text-xs text-gray-600">Producto activo (disponible para pedidos)</label>
+                   onChange={e => setForm(p => ({...p, activo: e.target.checked}))} className="rounded" />
+            <label htmlFor="activo" className="text-xs text-gray-600">Producto activo</label>
           </div>
 
           <div className="flex gap-2 justify-end pt-2">
             <button onClick={() => setModal(false)} className="btn-secondary">Cancelar</button>
-            <button onClick={handleSave} disabled={saving || !form.nombre || !form.precio_venta} className="btn-primary">
-              {saving ? 'Guardando...' : editing ? 'Actualizar' : 'Guardar'}
+            <button onClick={handleSave} disabled={saving || uploading || !form.nombre || !form.precio_venta}
+                    className="btn-primary">
+              {saving || uploading ? 'Guardando...' : editing ? 'Actualizar' : 'Guardar'}
             </button>
           </div>
         </div>

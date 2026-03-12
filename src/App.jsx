@@ -9,6 +9,8 @@ import Materiales from './pages/Materiales'
 import Compras from './pages/Compras'
 import Gastos from './pages/Gastos'
 import Finanzas from './pages/Finanzas'
+import Categorias from './pages/Categorias'
+import Configuracion from './pages/Configuracion'
 
 function ProtectedRoutes() {
   const { user, loading } = useAuth()
@@ -28,14 +30,16 @@ function ProtectedRoutes() {
   return (
     <Routes>
       <Route element={<Layout />}>
-        <Route path="/"           element={<Dashboard />} />
-        <Route path="/pedidos"    element={<Pedidos />} />
-        <Route path="/productos"  element={<Productos />} />
-        <Route path="/materiales" element={<Materiales />} />
-        <Route path="/compras"    element={<Compras />} />
-        <Route path="/gastos"     element={<Gastos />} />
-        <Route path="/finanzas"   element={<Finanzas />} />
-        <Route path="*"           element={<Navigate to="/" />} />
+        <Route path="/"              element={<Dashboard />} />
+        <Route path="/pedidos"       element={<Pedidos />} />
+        <Route path="/productos"     element={<Productos />} />
+        <Route path="/materiales"    element={<Materiales />} />
+        <Route path="/compras"       element={<Compras />} />
+        <Route path="/gastos"        element={<Gastos />} />
+        <Route path="/finanzas"      element={<Finanzas />} />
+        <Route path="/categorias"    element={<Categorias />} />
+        <Route path="/configuracion" element={<Configuracion />} />
+        <Route path="*"              element={<Navigate to="/" />} />
       </Route>
     </Routes>
   )

@@ -10,7 +10,9 @@ const titles = {
   '/materiales': 'Materiales',
   '/compras':    'Compras',
   '/gastos':     'Gastos varios',
-  '/finanzas':   'Finanzas',
+  '/finanzas':      'Finanzas',
+  '/categorias':    'Categorías',
+  '/configuracion': 'Configuración',
 }
 
 export default function Layout() {
