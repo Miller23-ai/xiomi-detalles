@@ -1,14 +1,12 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import Modal from '../components/ui/Modal'
+import SearchSelect from '../components/ui/SearchSelect'
 import { Plus, Trash2, ShoppingCart, Calendar, Eye } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
-const emptyForm = {
-  fecha: format(new Date(), 'yyyy-MM-dd'),
-  proveedor: '', notas: ''
-}
+const emptyForm = { fecha: format(new Date(), 'yyyy-MM-dd'), proveedor: '', notas: '' }
 
 export default function Compras() {
   const [compras,    setCompras]    = useState([])
@@ -33,6 +31,15 @@ export default function Compras() {
     setLoading(false)
   }
 
+  // Opciones para SearchSelect
+  const matOptions = materiales.map(m => ({
+    id: m.id,
+    label: m.nombre,
+    sub: `${m.unidad} · S/${Number(m.costo_unitario).toFixed(2)}`,
+    precio: m.costo_unitario,
+    unidad: m.unidad,
+  }))
+
   function openNew() {
     setForm(emptyForm)
     setItems([{ material_id: '', material_nombre: '', cantidad: 1, costo_unitario: '' }])
@@ -47,17 +54,31 @@ export default function Compras() {
     setItems(prev => prev.filter((_, i) => i !== idx))
   }
 
+  function updateItemMaterial(idx, id, opt) {
+    setItems(prev => {
+      const next = [...prev]
+      next[idx] = {
+        ...next[idx],
+        material_id:      id,
+        material_nombre:  opt?.label || '',
+        costo_unitario:   opt?.precio || next[idx].costo_unitario,
+      }
+      return next
+    })
+  }
+
+  function updateItemFree(idx, text) {
+    setItems(prev => {
+      const next = [...prev]
+      next[idx] = { ...next[idx], material_id: '', material_nombre: text }
+      return next
+    })
+  }
+
   function updateItem(idx, field, value) {
     setItems(prev => {
       const next = [...prev]
       next[idx] = { ...next[idx], [field]: value }
-      if (field === 'material_id') {
-        const mat = materiales.find(m => m.id === value)
-        if (mat) {
-          next[idx].costo_unitario = mat.costo_unitario
-          next[idx].material_nombre = mat.nombre
-        }
-      }
       return next
     })
   }
@@ -71,29 +92,34 @@ export default function Compras() {
       .from('compras').insert({ ...form, total }).select().single()
 
     if (compra) {
-      // Insert items
       const itemsToInsert = items
         .filter(i => i.cantidad > 0 && i.costo_unitario > 0)
         .map(i => ({
-          compra_id: compra.id,
-          material_id: i.material_id || null,
+          compra_id:       compra.id,
+          material_id:     i.material_id || null,
           material_nombre: i.material_nombre || 'Sin especificar',
-          cantidad: Number(i.cantidad),
-          costo_unitario: Number(i.costo_unitario),
-          subtotal: Number(i.cantidad) * Number(i.costo_unitario),
+          cantidad:        Number(i.cantidad),
+          costo_unitario:  Number(i.costo_unitario),
+          subtotal:        Number(i.cantidad) * Number(i.costo_unitario),
         }))
 
       if (itemsToInsert.length > 0) {
         await supabase.from('items_compra').insert(itemsToInsert)
-
-        // Update material stock
+        // Actualizar stock de materiales registrados
         for (const item of itemsToInsert) {
           if (item.material_id) {
             const mat = materiales.find(m => m.id === item.material_id)
             if (mat) {
-              await supabase.from('materiales')
-                .update({ stock_actual: mat.stock_actual + item.cantidad })
-                .eq('id', item.material_id)
+              const nuevo = Number(mat.stock_actual || 0) + item.cantidad
+              await supabase.from('materiales').update({ stock_actual: nuevo }).eq('id', item.material_id)
+              await supabase.from('ajustes_stock').insert({
+                material_id:   item.material_id,
+                tipo:          'entrada',
+                cantidad:      item.cantidad,
+                motivo:        `Compra a ${form.proveedor || 'proveedor'}`,
+                stock_antes:   mat.stock_actual,
+                stock_despues: nuevo,
+              })
             }
           }
         }
@@ -104,36 +130,31 @@ export default function Compras() {
   }
 
   async function handleDelete(id) {
-    if (!confirm('¿Eliminar esta compra? (El stock NO se revertirá automáticamente)')) return
+    if (!confirm('¿Eliminar esta compra? El stock NO se revertirá.')) return
     await supabase.from('compras').delete().eq('id', id)
     fetchAll()
   }
 
-  const totalMes = compras
-    .filter(c => c.fecha?.startsWith(new Date().toISOString().slice(0, 7)))
-    .reduce((s, c) => s + c.total, 0)
-
-  const totalGeneral = compras.reduce((s, c) => s + c.total, 0)
+  const totalMes     = compras.filter(c => c.fecha?.startsWith(new Date().toISOString().slice(0,7))).reduce((s,c) => s+c.total, 0)
+  const totalGeneral = compras.reduce((s,c) => s+c.total, 0)
 
   return (
     <div className="space-y-5">
-      {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         <div className="card text-center">
           <p className="text-2xl font-bold text-pink-600">S/ {totalMes.toFixed(2)}</p>
-          <p className="text-xs text-gray-400 mt-0.5">Compras este mes</p>
+          <p className="text-xs text-gray-400">Compras este mes</p>
         </div>
         <div className="card text-center">
           <p className="text-2xl font-bold text-gray-700">S/ {totalGeneral.toFixed(2)}</p>
-          <p className="text-xs text-gray-400 mt-0.5">Total histórico</p>
+          <p className="text-xs text-gray-400">Total histórico</p>
         </div>
         <div className="card text-center col-span-2 md:col-span-1">
           <p className="text-2xl font-bold text-gray-700">{compras.length}</p>
-          <p className="text-xs text-gray-400 mt-0.5">Registros de compra</p>
+          <p className="text-xs text-gray-400">Registros de compra</p>
         </div>
       </div>
 
-      {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-medium text-gray-600">Historial de compras</h2>
         <button onClick={openNew} className="btn-primary text-xs">
@@ -141,7 +162,6 @@ export default function Compras() {
         </button>
       </div>
 
-      {/* List */}
       {loading ? (
         <div className="flex justify-center py-12">
           <div className="w-8 h-8 border-4 border-pink-200 border-t-pink-500 rounded-full animate-spin" />
@@ -149,9 +169,7 @@ export default function Compras() {
       ) : (
         <div className="space-y-3">
           {compras.length === 0 && (
-            <div className="card text-center py-12 text-gray-400 text-sm">
-              No hay compras registradas
-            </div>
+            <div className="card text-center py-12 text-gray-400 text-sm">No hay compras registradas</div>
           )}
           {compras.map(c => (
             <div key={c.id} className="card flex items-center gap-4">
@@ -160,22 +178,17 @@ export default function Compras() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-sm font-medium text-gray-700">
-                    {c.proveedor || 'Proveedor no especificado'}
-                  </p>
+                  <p className="text-sm font-medium text-gray-700">{c.proveedor || 'Proveedor no especificado'}</p>
                   <span className="text-xs text-gray-400 flex items-center gap-1">
                     <Calendar size={10} />
                     {format(new Date(c.fecha + 'T12:00:00'), 'd MMM yyyy', { locale: es })}
                   </span>
                 </div>
                 <p className="text-xs text-gray-400 mt-0.5">
-                  {c.items_compra?.length || 0} materiales
-                  {c.notas && ` · ${c.notas}`}
+                  {c.items_compra?.length || 0} materiales{c.notas && ` · ${c.notas}`}
                 </p>
               </div>
-              <div className="text-right">
-                <p className="text-lg font-bold text-gray-700">S/ {Number(c.total).toFixed(2)}</p>
-              </div>
+              <p className="text-lg font-bold text-gray-700">S/ {Number(c.total).toFixed(2)}</p>
               <div className="flex gap-1">
                 <button onClick={() => setViewModal(c)}
                         className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all">
@@ -192,23 +205,21 @@ export default function Compras() {
       )}
 
       {/* Form Modal */}
-      <Modal open={modal} onClose={() => setModal(false)} title="Registrar compra de materiales" size="lg">
+      <Modal open={modal} onClose={() => setModal(false)} title="Registrar compra de materiales" size="xl">
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Fecha</label>
-              <input type="date" value={form.fecha}
-                     onChange={e => setForm(p => ({...p, fecha: e.target.value}))}
-                     className="input-field" />
+              <input type="date" value={form.fecha} onChange={e => setForm(p => ({...p, fecha: e.target.value}))} className="input-field" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Proveedor / Tienda</label>
               <input value={form.proveedor} onChange={e => setForm(p => ({...p, proveedor: e.target.value}))}
-                     className="input-field" placeholder="Ej: Mercado central" />
+                     className="input-field" placeholder="Ej: Mercado central, Saga..." />
             </div>
           </div>
 
-          {/* Items */}
+          {/* Items con SearchSelect */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="text-xs font-medium text-gray-600">Materiales comprados</label>
@@ -218,26 +229,30 @@ export default function Compras() {
             </div>
             <div className="space-y-2">
               {items.map((item, idx) => (
-                <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-amber-50/50 p-2 rounded-xl">
+                <div key={idx} className="grid grid-cols-12 gap-2 items-start bg-amber-50/50 p-2 rounded-xl">
+                  {/* Buscar material */}
                   <div className="col-span-5">
-                    <select value={item.material_id}
-                            onChange={e => updateItem(idx, 'material_id', e.target.value)}
-                            className="select-field text-xs py-2">
-                      <option value="">Seleccionar material</option>
-                      {materiales.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
-                    </select>
+                    <SearchSelect
+                      options={matOptions}
+                      value={item.material_id}
+                      onChange={(id, opt) => updateItemMaterial(idx, id, opt)}
+                      placeholder="Buscar material..."
+                      allowFreeText={true}
+                      freeTextValue={item.material_nombre}
+                      onFreeText={text => updateItemFree(idx, text)}
+                    />
                   </div>
                   <div className="col-span-2">
                     <input type="number" value={item.cantidad}
                            onChange={e => updateItem(idx, 'cantidad', e.target.value)}
-                           className="input-field text-xs py-2" placeholder="Cant." min="1" />
+                           className="input-field text-xs py-2.5" placeholder="Cant." min="1" />
                   </div>
                   <div className="col-span-3">
                     <input type="number" value={item.costo_unitario}
                            onChange={e => updateItem(idx, 'costo_unitario', e.target.value)}
-                           className="input-field text-xs py-2" placeholder="C/u S/" step="0.01" />
+                           className="input-field text-xs py-2.5" placeholder="C/u S/" step="0.01" />
                   </div>
-                  <div className="col-span-2 flex items-center justify-between">
+                  <div className="col-span-2 flex items-center justify-between pt-2">
                     <span className="text-xs font-medium text-gray-600">
                       S/{(Number(item.cantidad) * Number(item.costo_unitario || 0)).toFixed(2)}
                     </span>
@@ -262,11 +277,9 @@ export default function Compras() {
             <textarea value={form.notas} onChange={e => setForm(p => ({...p, notas: e.target.value}))}
                       className="input-field resize-none" rows={2} placeholder="Observaciones..." />
           </div>
-
           <p className="text-xs text-blue-600 bg-blue-50 px-3 py-2 rounded-xl">
-            💡 Al guardar, el stock de los materiales seleccionados se actualizará automáticamente.
+            💡 Al guardar, el stock de materiales seleccionados se actualizará automáticamente.
           </p>
-
           <div className="flex gap-2 justify-end">
             <button onClick={() => setModal(false)} className="btn-secondary">Cancelar</button>
             <button onClick={handleSave} disabled={saving} className="btn-primary">
@@ -283,9 +296,7 @@ export default function Compras() {
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-gray-50 rounded-xl p-3">
                 <p className="text-xs text-gray-400">Fecha</p>
-                <p className="font-medium">
-                  {format(new Date(viewModal.fecha + 'T12:00:00'), 'd MMM yyyy', { locale: es })}
-                </p>
+                <p className="font-medium">{format(new Date(viewModal.fecha + 'T12:00:00'), 'd MMM yyyy', { locale: es })}</p>
               </div>
               <div className="bg-gray-50 rounded-xl p-3">
                 <p className="text-xs text-gray-400">Proveedor</p>

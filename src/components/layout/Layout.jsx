@@ -13,6 +13,8 @@ const titles = {
   '/finanzas':      'Finanzas',
   '/categorias':    'Categorías',
   '/configuracion': 'Configuración',
+  '/usuarios':      'Usuarios',
+  '/clientes':      'Clientes',
 }
 
 export default function Layout() {

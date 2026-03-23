@@ -5,12 +5,13 @@ import { Plus, Pencil, Trash2, Search, Package, Upload, Image, X } from 'lucide-
 
 const emptyForm = {
   nombre: '', descripcion: '', categoria: '',
-  precio_venta: '', costo_estimado: '', stock: '0', activo: true, photo_url: ''
+  precio_venta: '', costo_estimado: '', stock: '0', activo: true, photo_url: '', material_id: '', descuenta_stock: false
 }
 
 export default function Productos() {
   const [productos,  setProductos]  = useState([])
   const [categorias, setCategorias] = useState([])
+  const [materiales, setMateriales] = useState([])
   const [loading,    setLoading]    = useState(true)
   const [search,     setSearch]     = useState('')
   const [modal,      setModal]      = useState(false)
@@ -22,13 +23,18 @@ export default function Productos() {
   const [photoPreview, setPhotoPreview] = useState(null)
   const fileRef = useRef()
 
-  useEffect(() => { fetchProductos(); fetchCategorias() }, [])
+  useEffect(() => { fetchProductos(); fetchCategorias(); fetchMateriales() }, [])
 
   async function fetchProductos() {
     setLoading(true)
     const { data } = await supabase.from('productos').select('*').order('nombre')
     setProductos(data || [])
     setLoading(false)
+  }
+
+  async function fetchMateriales() {
+    const { data } = await supabase.from('materiales').select('id, nombre, es_producto').eq('es_producto', true).order('nombre')
+    setMateriales(data || [])
   }
 
   async function fetchCategorias() {
@@ -89,6 +95,8 @@ export default function Productos() {
       precio_venta:   Number(form.precio_venta) || 0,
       costo_estimado: Number(form.costo_estimado) || 0,
       stock:          Number(form.stock) || 0,
+      material_id:    form.material_id || null,
+      descuenta_stock: form.descuenta_stock || false,
     }
 
     let productoId = editing
@@ -327,6 +335,32 @@ export default function Productos() {
               </span>
             </div>
           )}
+
+          {/* Vinculo a material */}
+          <div className="border border-purple-200 bg-purple-50/30 rounded-xl p-4 space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Material vinculado (opcional)
+              </label>
+              <p className="text-xs text-gray-400 mb-2">
+                Si este producto consume/es un material (ej: peluche), vincúlalo aquí para que el stock se descuente automáticamente al entregar.
+              </p>
+              <select value={form.material_id} onChange={e => setForm(p => ({...p, material_id: e.target.value}))}
+                      className="select-field">
+                <option value="">— Sin vínculo —</option>
+                {materiales.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+              </select>
+            </div>
+            {form.material_id && (
+              <div className="flex items-center gap-2">
+                <input type="checkbox" id="descuenta_stock" checked={form.descuenta_stock}
+                       onChange={e => setForm(p => ({...p, descuenta_stock: e.target.checked}))} className="rounded" />
+                <label htmlFor="descuenta_stock" className="text-xs text-gray-600 cursor-pointer">
+                  Descontar stock del material al entregar el pedido
+                </label>
+              </div>
+            )}
+          </div>
 
           <div className="flex items-center gap-2">
             <input type="checkbox" id="activo" checked={form.activo}

@@ -9,3 +9,10 @@
 
 [build.environment]
   NODE_VERSION = "18"
+
+[functions]
+  node_bundler = "esbuild"
+
+[build.environment]
+  SUPABASE_URL = ""
+  SUPABASE_SERVICE_KEY = ""

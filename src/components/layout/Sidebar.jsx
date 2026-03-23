@@ -2,34 +2,31 @@ import { NavLink } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import {
   LayoutDashboard, ShoppingCart, Package, Gift, BarChart2,
-  LogOut, ChevronRight, Flower2, X, Wallet, Tag, Settings
+  LogOut, ChevronRight, Flower2, X, Wallet, Tag, Settings, Users, UserCheck
 } from 'lucide-react'
 
 const links = [
-  { to: '/',              label: 'Dashboard',    icon: LayoutDashboard },
-  { to: '/pedidos',       label: 'Pedidos',       icon: Gift },
-  { to: '/productos',     label: 'Productos',     icon: Package },
-  { to: '/materiales',    label: 'Materiales',    icon: Flower2 },
-  { to: '/compras',       label: 'Compras',       icon: ShoppingCart },
-  { to: '/gastos',        label: 'Gastos',        icon: Wallet },
-  { to: '/finanzas',      label: 'Finanzas',      icon: BarChart2 },
-  null, // divider
-  { to: '/categorias',    label: 'Categorías',    icon: Tag },
-  { to: '/configuracion', label: 'Configuración', icon: Settings },
+  { to: '/',              label: 'Dashboard',      icon: LayoutDashboard },
+  { to: '/pedidos',       label: 'Pedidos',         icon: Gift },
+  { to: '/clientes',      label: 'Clientes',        icon: UserCheck },
+  { to: '/productos',     label: 'Productos',       icon: Package },
+  { to: '/materiales',    label: 'Materiales',      icon: Flower2 },
+  { to: '/compras',       label: 'Compras',         icon: ShoppingCart },
+  { to: '/gastos',        label: 'Gastos',          icon: Wallet },
+  { to: '/finanzas',      label: 'Finanzas',        icon: BarChart2 },
+  null,
+  { to: '/categorias',    label: 'Categorías',      icon: Tag },
+  { to: '/usuarios',      label: 'Usuarios',        icon: Users },
+  { to: '/configuracion', label: 'Configuración',   icon: Settings },
 ]
 
 export default function Sidebar({ open, onClose }) {
   const { signOut, user } = useAuth()
-
   return (
     <>
-      {open && (
-        <div className="fixed inset-0 bg-black/50 z-20 lg:hidden" onClick={onClose} />
-      )}
-
+      {open && <div className="fixed inset-0 bg-black/50 z-20 lg:hidden" onClick={onClose} />}
       <aside className={`
-        fixed top-0 left-0 h-full w-64 z-30 flex flex-col
-        transition-transform duration-300
+        fixed top-0 left-0 h-full w-64 z-30 flex flex-col transition-transform duration-300
         lg:translate-x-0 lg:static lg:z-auto
         ${open ? 'translate-x-0' : '-translate-x-full'}
       `} style={{ background: 'linear-gradient(180deg, #1a0a10 0%, #2d0f1e 100%)' }}>
@@ -37,25 +34,20 @@ export default function Sidebar({ open, onClose }) {
         <div className="p-5 border-b border-pink-900/40">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                 style={{ background: 'linear-gradient(135deg, #f43f8a, #a8155a)' }}>
+                 style={{ background: 'linear-gradient(135deg, var(--color-primary, #f43f8a), var(--color-secondary, #a8155a))' }}>
               <Gift size={20} className="text-white" />
             </div>
             <div className="flex-1">
               <p className="font-display text-white text-base leading-tight">Xiomi Detalles</p>
               <p className="text-pink-400/60 text-xs">Panel de Gestión</p>
             </div>
-            <button onClick={onClose} className="lg:hidden text-pink-300/50 hover:text-white">
-              <X size={18} />
-            </button>
+            <button onClick={onClose} className="lg:hidden text-pink-300/50 hover:text-white"><X size={18} /></button>
           </div>
         </div>
 
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-          <p className="text-pink-500/40 text-xs font-medium uppercase tracking-widest px-4 mb-3">Gestión</p>
           {links.map((link, i) => {
-            if (link === null) return (
-              <div key={`div-${i}`} className="my-2 border-t border-pink-900/30" />
-            )
+            if (link === null) return <div key={`d${i}`} className="my-2 border-t border-pink-900/30" />
             const Icon = link.icon
             return (
               <NavLink key={link.to} to={link.to} end={link.to === '/'} onClick={onClose}
@@ -78,10 +70,8 @@ export default function Sidebar({ open, onClose }) {
               <p className="text-pink-500/50 text-xs">Administradora</p>
             </div>
           </div>
-          <button onClick={signOut}
-                  className="sidebar-link w-full text-red-400/70 hover:text-red-300 hover:bg-red-900/20">
-            <LogOut size={17} />
-            <span>Cerrar sesión</span>
+          <button onClick={signOut} className="sidebar-link w-full text-red-400/70 hover:text-red-300 hover:bg-red-900/20">
+            <LogOut size={17} /> <span>Cerrar sesión</span>
           </button>
         </div>
       </aside>
