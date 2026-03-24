@@ -148,6 +148,7 @@ export default function Pedidos() {
       total,
       adelanto: Number(form.adelanto) || 0,
       cliente_id: form.cliente_id || null,
+      fecha_entrega: form.fecha_entrega || null,
     }
     // Remove clientes (join column)
     delete payload.clientes
